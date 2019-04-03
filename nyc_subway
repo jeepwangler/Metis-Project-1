@@ -3,6 +3,7 @@ import requests
 from datetime import timedelta, date
 import pickle
 import numpy as np
+import seaborn as sns
 
 pd.set_option('display.max_rows',200)
 
@@ -94,6 +95,18 @@ df.columns = ['ENTRIES','ENTRIES_c','EXITS','EXITS_c','entries','entries_c','exi
 
 df = df[df.passages_c >=3]
 
-df[['entries','exits','passages']].sort_values(['passages'],ascending=False)
+df = df[['entries','exits','passages']].sort_values(['passages'],ascending=False).reset_index()
 
-df.reset_index().time.value_counts()
+top6 = ['GRD CNTRL-42 ST','34 ST-PENN STA','34 ST-HERALD SQ','FULTON ST','23 ST','TIMES SQ-42 ST']
+
+df_top6 = df[df.STATION.isin(top6)].groupby(['STATION','daytype','time']).sum().reset_index()
+
+weekdays = df_top6[df_top6.daytype=='Weekday']
+weekdays = weekdays[['time','STATION','passages']]
+weekdays = weekdays.pivot(index='STATION',columns='time',values='passages')
+
+GC = df_top6[df_top6.STATION=='GRD CNTRL-42 ST']
+GC = GC[['time','daytype','passages']]
+GC = GC.pivot(index='daytype',columns='time',values='passages')
+GC
+sns.heatmap(weekdays,cmap="Blues",annot=False);
