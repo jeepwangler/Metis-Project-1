@@ -1,0 +1,82 @@
+import pandas as pd
+import requests
+from datetime import timedelta, date
+import pickle
+
+pd.set_option('display.max_rows',200)
+
+start = date(2018, 3, 1)
+end = date(2018, 6, 1)
+
+df = pd.DataFrame()
+
+for sdate in range((end - start).days):
+    fdate = (start + timedelta(sdate)).strftime('%y%m%d')
+    url = "http://web.mta.info/developers/data/nyct/turnstile/turnstile_" + fdate + ".txt"
+    try:
+        data = pd.read_csv(url)
+        data['file'] = fdate
+        df = df.append(data)
+    except:
+        pass
+
+df['date'] = pd.to_datetime(df.DATE)
+
+pickle.dump(df, open('turnstiledata','wb'))
+
+df = pickle.load(open('turnstiledata','rb'))
+
+df['turnid'] = df['STATION'] + '/' + df['SCP'] + '/' + df['C/A']
+
+# Remove readings at unusual times (that don't land on an even hour)
+df = df[df.TIME.str.contains(':00:00', regex=False)]
+
+df = df.sort_values(['STATION','turnid','TIME'])
+
+df = df.rename(columns={ df.columns[10]: "EXITS" })
+
+pickle.dump(df, open('turnstiledata','wb'))
+
+
+df = pickle.load(open('turnstiledata','rb'))
+
+# # Check which turnstiles have the expected 42 audits
+# audit_counts = df.groupby(['turnid','date','TIME']).sum().groupby(['turnid']).count()
+# bad_turnids = audit_counts[audit_counts['ENTRIES']!=42].reset_index().turnid
+# len(bad_turnids)
+# good_turnids = audit_counts[audit_counts['ENTRIES']==42].reset_index().turnid
+# len(good_turnids)
+# pd.DataFrame(bad_turnids)
+# len(df)
+# irregular = df.merge(pd.DataFrame(bad_turnids),on='turnid')
+# irregular.groupby(['STATION','turnid','date','TIME']).sum()
+
+# Sum up for the different DESC, for each turnstile/timeblock
+
+# df[df.STATION.str.contains('TIMES SQ')].sort_values(['turnid','date','TIME'])
+df = df.groupby(['STATION','turnid','date','TIME'], as_index=False).sum()
+
+df['dayofweek'] = df.date.dt.day_name()
+
+# Create the net entries as differene in this row from following row entries
+df['entries'] = df.ENTRIES.shift(-1) - df.ENTRIES
+df['exits'] = df.EXITS.shift(-1) - df.EXITS
+df['passages'] = df.entries + df.exits
+
+# Delete last row for each turnstile, for which we can't calculate the net # entries
+df = df.groupby(['turnid'], as_index=False).apply(lambda x: x.iloc[:-1])
+df[df.STATION.str.contains('LEXINGTON')][df.dayofweek.str.contains('Sunday')]
+# Sum up turnstiles into stations
+df = df.groupby(['STATION','date','dayofweek','TIME'], as_index=False).sum()
+
+df = df[df.entries>0][df.exits>0]
+
+df.groupby(['STATION','dayofweek','TIME']).agg(['sum','count'])
+
+# Median weekly stats
+df = df.groupby(['STATION','dayofweek','TIME']).median()
+
+# lexington sunday @6
+# grand newton sundays @13
+
+df.sort_values(['entries'],ascending=False)
