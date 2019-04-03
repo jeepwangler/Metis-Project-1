@@ -2,11 +2,12 @@ import pandas as pd
 import requests
 from datetime import timedelta, date
 import pickle
+import numpy as np
 
 pd.set_option('display.max_rows',200)
 
-start = date(2018, 3, 1)
-end = date(2018, 6, 1)
+start = date(2018, 1, 1)
+end = date(2019, 1, 1)
 
 df = pd.DataFrame()
 
@@ -22,18 +23,14 @@ for sdate in range((end - start).days):
 
 df['date'] = pd.to_datetime(df.DATE)
 
-pickle.dump(df, open('turnstiledata','wb'))
-
-df = pickle.load(open('turnstiledata','rb'))
-
 df['turnid'] = df['STATION'] + '/' + df['SCP'] + '/' + df['C/A']
-
-# Remove readings at unusual times (that don't land on an even hour)
-df = df[df.TIME.str.contains(':00:00', regex=False)]
 
 df = df.sort_values(['STATION','turnid','TIME'])
 
 df = df.rename(columns={ df.columns[10]: "EXITS" })
+
+# Remove readings at unusual times (that don't land on an even hour)
+df = df[df.TIME.str.contains(':00:00', regex=False)]
 
 pickle.dump(df, open('turnstiledata','wb'))
 
@@ -57,6 +54,8 @@ df = pickle.load(open('turnstiledata','rb'))
 df = df.groupby(['STATION','turnid','date','TIME'], as_index=False).sum()
 
 df['dayofweek'] = df.date.dt.day_name()
+df['daytype'] = np.where(df['dayofweek'].isin(['Sunday','Saturday']), 'Weekend', 'Weekday')
+
 
 # Create the net entries as differene in this row from following row entries
 df['entries'] = df.ENTRIES.shift(-1) - df.ENTRIES
@@ -65,18 +64,25 @@ df['passages'] = df.entries + df.exits
 
 # Delete last row for each turnstile, for which we can't calculate the net # entries
 df = df.groupby(['turnid'], as_index=False).apply(lambda x: x.iloc[:-1])
-df[df.STATION.str.contains('LEXINGTON')][df.dayofweek.str.contains('Sunday')]
+#df[df.STATION.str.contains('LEXINGTON')][df.dayofweek.str.contains('Sunday')]
 # Sum up turnstiles into stations
-df = df.groupby(['STATION','date','dayofweek','TIME'], as_index=False).sum()
+df = df.groupby(['STATION','date','daytype','TIME'], as_index=False).sum()
 
-df = df[df.entries>0][df.exits>0]
+# Eliminate negatives at least
+df = df[df.entries>0]
+df = df[df.exits>0]
 
-df.groupby(['STATION','dayofweek','TIME']).agg(['sum','count'])
+pickle.dump(df, open('turnstiledata2','wb'))
 
-# Median weekly stats
-df = df.groupby(['STATION','dayofweek','TIME']).median()
 
-# lexington sunday @6
-# grand newton sundays @13
+df = pickle.load(open('turnstiledata2','rb'))
 
-df.sort_values(['entries'],ascending=False)
+df = df.groupby(['STATION','daytype','TIME']).agg(['median','count'])
+
+df.columns = df.columns.droplevel(1)
+
+df.columns = ['ENTRIES','ENTRIES_c','EXITS','EXITS_c','entries','entries_c','exits','exits_c','passages','passages_c']
+
+df = df[df.passages_c >=3]
+
+df[['entries','exits','passages']].sort_values(['entries'],ascending=False)
