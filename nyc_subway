@@ -34,8 +34,18 @@ df = df[df.TIME.str.contains(':00:00', regex=False)]
 
 pickle.dump(df, open('turnstiledata','wb'))
 
-
 df = pickle.load(open('turnstiledata','rb'))
+
+conditions = [  df.TIME.isin(['23:00:00','00:00:00','01:00:00','02:00:00']),
+                df.TIME.isin(['03:00:00','04:00:00','05:00:00','06:00:00']),
+                df.TIME.isin(['07:00:00','08:00:00','09:00:00','10:00:00']),
+                df.TIME.isin(['11:00:00','12:00:00','13:00:00','14:00:00']),
+                df.TIME.isin(['15:00:00','16:00:00','17:00:00','18:00:00']),
+                df.TIME.isin(['19:00:00','20:00:00','21:00:00','22:00:00'])]
+
+choices = ['00:00','04:00','08:00','12:00','16:00','20:00']
+
+df['time'] = np.select(conditions, choices, default=df.TIME)
 
 # # Check which turnstiles have the expected 42 audits
 # audit_counts = df.groupby(['turnid','date','TIME']).sum().groupby(['turnid']).count()
@@ -50,12 +60,12 @@ df = pickle.load(open('turnstiledata','rb'))
 
 # Sum up for the different DESC, for each turnstile/timeblock
 
-# df[df.STATION.str.contains('TIMES SQ')].sort_values(['turnid','date','TIME'])
-df = df.groupby(['STATION','turnid','date','TIME'], as_index=False).sum()
+df = df.groupby(['STATION','turnid','date','time'], as_index=False).sum()
 
 df['dayofweek'] = df.date.dt.day_name()
-df['daytype'] = np.where(df['dayofweek'].isin(['Sunday','Saturday']), 'Weekend', 'Weekday')
+#df['daytype'] = np.where(df['dayofweek'].isin(['Sunday','Saturday']), 'Weekend', 'Weekday')
 
+df['daytype'] = np.select([df.dayofweek.isin(['Monday','Tuesday','Wednesday','Thursday','Friday'])], ['Weekday'], default=df.dayofweek)
 
 # Create the net entries as differene in this row from following row entries
 df['entries'] = df.ENTRIES.shift(-1) - df.ENTRIES
@@ -66,18 +76,17 @@ df['passages'] = df.entries + df.exits
 df = df.groupby(['turnid'], as_index=False).apply(lambda x: x.iloc[:-1])
 #df[df.STATION.str.contains('LEXINGTON')][df.dayofweek.str.contains('Sunday')]
 # Sum up turnstiles into stations
-df = df.groupby(['STATION','date','daytype','TIME'], as_index=False).sum()
+df = df.groupby(['STATION','date','daytype','time'], as_index=False).sum()
 
-# Eliminate negatives at least
+# Eliminate negatives
 df = df[df.entries>0]
 df = df[df.exits>0]
 
 pickle.dump(df, open('turnstiledata2','wb'))
 
-
 df = pickle.load(open('turnstiledata2','rb'))
 
-df = df.groupby(['STATION','daytype','TIME']).agg(['median','count'])
+df = df.groupby(['STATION','daytype','time']).agg(['median','count'])
 
 df.columns = df.columns.droplevel(1)
 
@@ -85,4 +94,6 @@ df.columns = ['ENTRIES','ENTRIES_c','EXITS','EXITS_c','entries','entries_c','exi
 
 df = df[df.passages_c >=3]
 
-df[['entries','exits','passages']].sort_values(['entries'],ascending=False)
+df[['entries','exits','passages']].sort_values(['passages'],ascending=False)
+
+df.reset_index().time.value_counts()
