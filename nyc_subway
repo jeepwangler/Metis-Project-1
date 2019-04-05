@@ -30,8 +30,6 @@ df = df.sort_values(['STATION','turnid','TIME'])
 
 df = df.rename(columns={ df.columns[10]: "EXITS" })
 
-
-
 # Remove readings at unusual times (that don't land on an even hour)
 df = df[df.TIME.str.contains(':00:00', regex=False)]
 
@@ -81,9 +79,7 @@ df = df.groupby(['turnid'], as_index=False).apply(lambda x: x.iloc[:-1])
 
 pickle.dump(df, open('turnstiledata2','wb'))
 
-
 df = pickle.load(open('turnstiledata2','rb'))
-
 
 # for now remove fulton which is a suspicious outlier
 df = df[df.STATION != 'FULTON ST']
@@ -124,10 +120,12 @@ findtop = df.reset_index().groupby(['STATION'],as_index=False).mean()
 top_6 = findtop.sort_values('passages',ascending=False).STATION[0:8]
 top_6_t = findtop.sort_values('passages_t',ascending=False).STATION[0:8]
 
+df_t = df[['entries','exits','passages_t']].sort_values(['passages_t'],ascending=False).reset_index()
 df = df[['entries','exits','passages']].sort_values(['passages'],ascending=False).reset_index()
 df_top6 = df[df.STATION.isin(top_6)].groupby(['STATION','daytype','time']).sum().reset_index()
-df_top6_t = df[df.STATION.isin(top_6_t)].groupby(['STATION','daytype','time']).sum().reset_index()
+df_top6_t = df_t[df_t.STATION.isin(top_6_t)].groupby(['STATION','daytype','time']).sum().reset_index()
 
+df_top6
 weekdays = df_top6[df_top6.daytype=='Weekday']
 weekdays = weekdays[['time','STATION','passages']]
 weekdays = weekdays.pivot(index='STATION',columns='time',values='passages')
@@ -141,22 +139,26 @@ sundays = sundays[['time','STATION','passages']]
 sundays = sundays.pivot(index='STATION',columns='time',values='passages')
 
 weekdays_t = df_top6_t[df_top6_t.daytype=='Weekday']
-weekdays_t = weekdays_t[['time','STATION','passages']]
-weekdays_t = weekdays_t.pivot(index='STATION',columns='time',values='passages')
+weekdays_t = weekdays_t[['time','STATION','passages_t']]
+weekdays_t = weekdays_t.pivot(index='STATION',columns='time',values='passages_t')
 
 saturdays_t = df_top6_t[df_top6_t.daytype=='Saturday']
-saturdays_t = saturdays_t[['time','STATION','passages']]
-saturdays_t = saturdays_t.pivot(index='STATION',columns='time',values='passages')
+saturdays_t = saturdays_t[['time','STATION','passages_t']]
+saturdays_t = saturdays_t.pivot(index='STATION',columns='time',values='passages_t')
 
 sundays_t = df_top6_t[df_top6_t.daytype=='Sunday']
-sundays_t = sundays_t[['time','STATION','passages']]
-sundays_t = sundays_t.pivot(index='STATION',columns='time',values='passages')
+sundays_t = sundays_t[['time','STATION','passages_t']]
+sundays_t = sundays_t.pivot(index='STATION',columns='time',values='passages_t')
+weekdays
 
+import matplotlib.pyplot as plt
+plt.figure(figsize=(10, 8))
+plt.show()
 
-sns.heatmap(weekdays,cmap="Greens",annot=False).set_title('WEEKDAYS').savefig("wang.sv");
+sns.heatmap(weekdays,cmap="Greens",annot=False).set_title('WEEKDAYS').get_figure().savefig('thisissodumb');
 
-sns.heatmap(weekdays_t,cmap="Greens",annot=False).set_title('WEEKDAYS - TOURIST ADJUSTED');
-sns.heatmap(saturdays,cmap="Reds",annot=False).set_title('SATURDAYS');
-sns.heatmap(saturdays_t,cmap="Reds",annot=False).set_title('SATURDAYS - TOURIST ADJUSTED');
+sns.heatmap(weekdays_t,cmap="Greens",annot=False,cbar=False).set_title('WEEKDAYS - TOURIST ADJUSTED');
+sns.heatmap(saturdays,cmap="Purples",annot=False).set_title('SATURDAYS');
+sns.heatmap(saturdays_t,cmap="Purples",annot=False,cbar=False).set_title('SATURDAYS - TOURIST ADJUSTED');
 sns.heatmap(sundays,cmap="Blues",annot=False).set_title('SUNDAYS');
-sns.heatmap(sundays_t,cmap="Blues",annot=False).set_title('SUNDAYS - TOURIST ADJUSTED');
+sns.heatmap(sundays_t,cmap="Blues",annot=False,cbar=False).set_title('SUNDAYS - TOURIST ADJUSTED');
